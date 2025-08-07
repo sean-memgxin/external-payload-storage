@@ -1,8 +1,8 @@
-name: Save Payload
+name: Save Encoded Payload
 
-on:
+on: 
   repository_dispatch:
-    types: ["payload_received"]  # 自定义事件类型
+    types: [payload_received]
 
 jobs:
   save:
@@ -10,26 +10,30 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-
-      - name: Generate Payload File
+        
+      - name: Wrap Payload
         run: |
-          # 生成不重复文件名
-          FILENAME="payload_$(date -u +'%Y%m%dT%H%M%S').txt"
+          # 原始负载->包装处理
+          echo '${{ toJSON(github.event.client_payload) }}' > raw.json
+          python .github/scripts/wrap_payload.py < raw.json > wrapped.json
           
-          # 转换JSON为字符串并存储
-          echo '${{ toJSON(github.event.client_payload) }}' > $FILENAME
+          # 提取包装后内容
+          CONTENT=$(cat wrapped.json)
           
-          # 添加提交信息
-          echo "Saved payload to $FILENAME" >> payloads.log
+      - name: Save File
+        run: |
+          FILENAME="payload-$(date -u +'%s').txt"
+          echo "$CONTENT" > $FILENAME
+          gzip -c $FILENAME > ${FILENAME}.gz  # 压缩存储可选
 
       - name: Commit Changes
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add *.txt
-          git add payloads.log
-          git commit -m "[Automated] Add new payload file"
+          git config user.name "auto-saver"
+          git config user.email "save@github"
+          git add *.txt *.gz
+          git commit -m "Saved payload $FILENAME"
           git push
+
 
       # 可选：添加执行结果通知
       - name: Notification
