@@ -1,0 +1,42 @@
+name: Save Payload
+
+on:
+  repository_dispatch:
+    types: ["payload_received"]  # 自定义事件类型
+
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Generate Payload File
+        run: |
+          # 生成不重复文件名
+          FILENAME="payload_$(date -u +'%Y%m%dT%H%M%S').txt"
+          
+          # 转换JSON为字符串并存储
+          echo '${{ toJSON(github.event.client_payload) }}' > $FILENAME
+          
+          # 添加提交信息
+          echo "Saved payload to $FILENAME" >> payloads.log
+
+      - name: Commit Changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add *.txt
+          git add payloads.log
+          git commit -m "[Automated] Add new payload file"
+          git push
+
+      # 可选：添加执行结果通知
+      - name: Notification
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            if (context.payload.action === 'payload_received') {
+              console.log(`✅ Success! Payload saved at commit ${context.sha}`);
+            }
